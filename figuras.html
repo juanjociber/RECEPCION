@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herramienta de Dibujo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous"></head>
+<body>
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-3">
+                <h4>Herramientas</h4>
+                <button class="btn btn-primary mb-2" onclick="setTool('circle')">Círculo</button>
+                <button class="btn btn-primary mb-2" onclick="setTool('rectangle')">Rectángulo</button>
+                <button class="btn btn-primary mb-2" onclick="setTool('arrow')">Flecha</button>
+                <button class="btn btn-secondary mb-2" onclick="setTool('select')">Seleccionar</button>
+
+                <hr>
+                <h4>Figuras</h4>
+                <ul id="shapeList" class="list-group">
+                    <!-- Las figuras aparecerán aquí -->
+                </ul>
+            </div>
+            <div class="col-md-9">
+                <canvas id="canvas" width="800" height="600" style="border:1px solid #000;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para editar nombre -->
+    <div class="modal fade" id="nameModal" tabindex="-1" aria-labelledby="nameModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="nameModalLabel">Editar Nombre de Figura</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="nameInput" class="form-control" placeholder="Nombre de la figura">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="saveName()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para eliminar figura -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel">Eliminar Figura</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    ¿Estás seguro de que quieres eliminar esta figura?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteShape()">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/5.1.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const shapes = [];
+      let tool = 'circle';
+      let isDrawing = false;
+      let startX, startY, currentX, currentY;
+      let selectedShapeIndex = null;
+      let isMoving = false;
+      let color = '#000';
+      let lineWidth = 2;
+
+      function setTool(selectedTool) {
+        tool = selectedTool;
+      }
+
+      function drawImage() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        shapes.forEach((shape) => {
+          ctx.strokeStyle = shape.color;
+          ctx.lineWidth = shape.lineWidth;
+
+          if (shape.type === 'circle') {
+            ctx.beginPath();
+            ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.stroke();
+          } else if (shape.type === 'rectangle') {
+            ctx.beginPath();
+            ctx.rect(shape.x, shape.y, shape.width, shape.height);
+            ctx.closePath();
+            ctx.stroke();
+          } else if (shape.type === 'arrow') {
+            ctx.beginPath();
+            ctx.moveTo(shape.startX, shape.startY);
+            ctx.lineTo(shape.endX, shape.endY);
+            ctx.stroke();
+
+            const headlen = 10; // Longitud de la cabeza de la flecha
+            const angle = Math.atan2(shape.endY - shape.startY, shape.endX - shape.startX);
+            ctx.beginPath();
+            ctx.moveTo(shape.endX, shape.endY);
+            ctx.lineTo(shape.endX - headlen * Math.cos(angle - Math.PI / 6), shape.endY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(shape.endX, shape.endY);
+            ctx.lineTo(shape.endX - headlen * Math.cos(angle + Math.PI / 6), shape.endY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+          }
+        });
+      }
+
+      function drawTemporaryShape() {
+        if (isDrawing) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          drawImage();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+
+          if (tool === 'circle') {
+            const radius = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
+            ctx.beginPath();
+            ctx.arc(startX, startY, radius, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.stroke();
+          } else if (tool === 'rectangle') {
+            ctx.beginPath();
+            ctx.rect(startX, startY, currentX - startX, currentY - startY);
+            ctx.closePath();
+            ctx.stroke();
+          } else if (tool === 'arrow') {
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(currentX, currentY);
+            ctx.stroke();
+            const headlen = 10; // Longitud de la cabeza de la flecha
+            const angle = Math.atan2(currentY - startY, currentX - startX);
+            ctx.beginPath();
+            ctx.moveTo(currentX, currentY);
+            ctx.lineTo(currentX - headlen * Math.cos(angle - Math.PI / 6), currentY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(currentX, currentY);
+            ctx.lineTo(currentX - headlen * Math.cos(angle + Math.PI / 6), currentY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+          }
+        }
+      }
+
+      canvas.addEventListener('mousedown', (e) => {
+        if (tool !== 'select') {
+          isDrawing = true;
+          startX = e.offsetX;
+          startY = e.offsetY;
+        } else {
+          startX = e.offsetX;
+          startY = e.offsetY;
+          selectedShapeIndex = findShapeIndex(startX, startY);
+          if (selectedShapeIndex !== null) {
+            isMoving = true;
+          }
+        }
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        currentX = e.offsetX;
+        currentY = e.offsetY;
+        if (isDrawing) {
+          drawTemporaryShape();
+        } else if (isMoving) {
+          const dx = currentX - startX;
+          const dy = currentY - startY;
+          moveShape(selectedShapeIndex, dx, dy);
+          startX = currentX;
+          startY = currentY;
+          drawImage();
+        }
+      });
+
+      canvas.addEventListener('mouseup', () => {
+        if (isDrawing) {
+          addShape();
+        }
+        isDrawing = false;
+        isMoving = false;
+      });
+
+      function addShape() {
+        let newShape;
+        if (tool === 'circle') {
+          const radius = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
+          newShape = { type: 'circle', x: startX, y: startY, radius, color, lineWidth };
+        } else if (tool === 'rectangle') {
+          newShape = { type: 'rectangle', x: startX, y: startY, width: currentX - startX, height: currentY - startY, color, lineWidth };
+        } else if (tool === 'arrow') {
+          newShape = { type: 'arrow', startX, startY, endX: currentX, endY: currentY, color, lineWidth };
+        }
+        shapes.push(newShape);
+        addShapeToList(newShape);
+        drawImage();
+      }
+
+      function addShapeToList(shape) {
+        const shapeList = document.getElementById('shapeList');
+        const listItem = document.createElement('li');
+        listItem.className = 'list-group-item';
+        listItem.textContent = `${shape.type.charAt(0).toUpperCase() + shape.type.slice(1)} - ${shapes.length}`;
+
+        // Crear los checkboxes de Bueno, Regular y Malo
+        const checkboxContainer = document.createElement('div');
+        checkboxContainer.className = 'checkbox-container';
+
+        const buenoLabel = document.createElement('label');
+        const buenoCheckbox = document.createElement('input');
+        buenoCheckbox.type = 'checkbox';
+        buenoLabel.textContent = 'Bueno';
+        buenoLabel.appendChild(buenoCheckbox);
+
+        const regularLabel = document.createElement('label');
+        const regularCheckbox = document.createElement('input');
+        regularCheckbox.type = 'checkbox';
+        regularLabel.textContent = 'Regular';
+        regularLabel.appendChild(regularCheckbox);
+
+        const maloLabel = document.createElement('label');
+        const maloCheckbox = document.createElement('input');
+        maloCheckbox.type = 'checkbox';
+        maloLabel.textContent = 'Malo';
+        maloLabel.appendChild(maloCheckbox);
+
+        checkboxContainer.appendChild(buenoLabel);
+        checkboxContainer.appendChild(regularLabel);
+        checkboxContainer.appendChild(maloLabel);
+
+        listItem.appendChild(checkboxContainer);
+        shapeList.appendChild(listItem);
+      }
+
+      function findShapeIndex(x, y) {
+        for (let i = shapes.length - 1; i >= 0; i--) {
+          const shape = shapes[i];
+          if (shape.type === 'circle') {
+            const distance = Math.sqrt(Math.pow(x - shape.x, 2) + Math.pow(y - shape.y, 2));
+            if (distance <= shape.radius) return i;
+          } else if (shape.type === 'rectangle') {
+            if (x >= shape.x && x <= shape.x + shape.width && y >= shape.y && y <= shape.y + shape.height) return i;
+          } else if (shape.type === 'arrow') {
+            const distance = Math.sqrt(Math.pow(x - shape.startX, 2) + Math.pow(y - shape.startY, 2));
+            if (distance <= 10) return i; // margen de error para seleccionar la flecha
+          }
+        }
+        return null;
+      }
+
+      function moveShape(index, dx, dy) {
+        const shape = shapes[index];
+        if (shape.type === 'circle' || shape.type === 'rectangle') {
+          shape.x += dx;
+          shape.y += dy;
+        } else if (shape.type === 'arrow') {
+          shape.startX += dx;
+          shape.startY += dy;
+          shape.endX += dx;
+          shape.endY += dy;
+        }
+      }
+
+    </script>
+</body>
+</html>
